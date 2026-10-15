@@ -46,6 +46,7 @@
     }
     .glow-sky { box-shadow: 0 0 20px rgba(56, 189, 248, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4); }
     .glow-emerald { box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4); }
+    .glow-indigo { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2), 0 8px 32px rgba(0, 0, 0, 0.4); }
     .glow-red { box-shadow: 0 0 20px rgba(239, 68, 68, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4); }
     .glow-amber { box-shadow: 0 0 20px rgba(245, 158, 11, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4); }
 
@@ -56,6 +57,14 @@
 
     .btn-press { transition: all 0.15s ease; }
     .btn-press:active { transform: scale(0.96); }
+
+    /* ===== Selector de modo ENTRADA / SALIDA / AUTO ===== */
+    .btn-modo { border: 1px solid #334155; background: rgba(15, 23, 42, 0.8); color: #94a3b8; }
+    .btn-modo:hover { color: #e2e8f0; border-color: #475569; }
+    .btn-modo[aria-pressed="true"] { color: #fff; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); }
+    .btn-modo[aria-pressed="true"][data-modo="ENTRADA"] { background: #059669; border-color: #34d399; }
+    .btn-modo[aria-pressed="true"][data-modo="SALIDA"]  { background: #4f46e5; border-color: #818cf8; }
+    .btn-modo[aria-pressed="true"][data-modo="AUTO"]    { background: #0284c7; border-color: #38bdf8; }
 
     .gradient-text {
       background: linear-gradient(135deg, #38bdf8, #0ea5e9, #06b6d4);
@@ -117,8 +126,28 @@
   <!-- CONTENIDO PRINCIPAL -->
   <div class="max-w-5xl mx-auto p-4 grid gap-6 md:grid-cols-2 flex-grow w-full mt-6">
 
-    <!-- ===== COLUMNA IZQUIERDA: CÁMARA ===== -->
+    <!-- ===== COLUMNA IZQUIERDA: MODO + CÁMARA ===== -->
     <section class="space-y-4 animate-fade-up" style="animation-delay: 0.1s; opacity: 0;">
+
+      <!-- SELECTOR DE MODO: ENTRADA / SALIDA / AUTO -->
+      <div>
+        <p class="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-2 flex items-center gap-2">
+          <i class="fa-solid fa-right-left text-sky-500"></i> Modo de registro
+        </p>
+        <div id="selectorModo" class="grid grid-cols-3 gap-2">
+          <button type="button" data-modo="ENTRADA" aria-pressed="false" class="btn-modo btn-press rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i> ENTRADA
+          </button>
+          <button type="button" data-modo="SALIDA" aria-pressed="false" class="btn-modo btn-press rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> SALIDA
+          </button>
+          <button type="button" data-modo="AUTO" aria-pressed="false" class="btn-modo btn-press rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-rotate"></i> AUTO
+          </button>
+        </div>
+        <p id="textoModo" class="text-xs text-slate-500 mt-2"></p>
+      </div>
+
       <div class="flex gap-2">
         <button id="btnCamara" class="btn-press flex-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-sky-900/50 transition-all flex items-center justify-center gap-2">
           <i class="fa-solid fa-play"></i> INICIAR CÁMARA
@@ -199,6 +228,36 @@
       ERROR:         { caja: "bg-red-900/40 border-red-500/50",    titulo: "❌ ERROR" },
       CARGANDO:      { caja: "bg-sky-900/20 border-sky-800",  titulo: "Consultando…" }
     };
+    // Las SALIDAS se muestran en índigo para distinguirlas de las ENTRADAS (verde)
+    ESTILOS.OK_SALIDA = { caja: "bg-indigo-900/40 border-indigo-500/50", titulo: "" };
+
+    // ======== MODO DE REGISTRO: ENTRADA / SALIDA / AUTO ========
+    const MODOS = ["ENTRADA", "SALIDA", "AUTO"];
+    const DESCRIPCION_MODO = {
+      ENTRADA: "Todos los escaneos se registrarán como ENTRADA.",
+      SALIDA:  "Todos los escaneos se registrarán como SALIDA.",
+      AUTO:    "El sistema alterna ENTRADA / SALIDA según el último registro de cada empleado."
+    };
+    let modo = "AUTO";
+    try {
+      const guardado = localStorage.getItem("modo_registro");
+      if (MODOS.includes(guardado)) modo = guardado;
+    } catch (e) {}
+
+    function aplicarModo() {
+      document.querySelectorAll("#selectorModo button").forEach(b => {
+        b.setAttribute("aria-pressed", b.dataset.modo === modo ? "true" : "false");
+      });
+      $("textoModo").textContent = DESCRIPCION_MODO[modo];
+    }
+
+    function cambiarModo(nuevo) {
+      if (!MODOS.includes(nuevo) || nuevo === modo) return;
+      modo = nuevo;
+      ultimoCodigo = ""; // permite volver a escanear al mismo empleado con el nuevo modo
+      try { localStorage.setItem("modo_registro", modo); } catch (e) {}
+      aplicarModo();
+    }
 
     function obtenerClave(forzar) {
       let clave = "";
@@ -224,7 +283,7 @@
       if (!clave) return { ok: false, estado: "ERROR", mensaje: "Falta la clave. Recarga la página." };
       const resp = await fetch(API_URL, {
         method: "POST",
-        body: JSON.stringify({ accion: "registrar", codigo, firma, punto: PUNTO_CONTROL, clave })
+        body: JSON.stringify({ accion: "registrar", codigo, firma, tipo: modo, punto: PUNTO_CONTROL, clave })
       });
       const datos = await resp.json();
       if (datos.estado === "CLAVE_INVALIDA") {
@@ -262,7 +321,7 @@
     function mostrarEstado(estado, r) {
       clearTimeout(temporizador);
       const caja = $("resultado");
-      const est = ESTILOS[estado] || ESTILOS.ERROR;
+      const est = ESTILOS[(estado === "OK" && r.tipo === "SALIDA") ? "OK_SALIDA" : estado] || ESTILOS.ERROR;
       caja.className = "result-card rounded-2xl p-6 min-h-[240px] flex flex-col justify-center text-center shadow-lg border transition-all duration-400 " + est.caja;
       caja.innerHTML = "";
 
@@ -273,12 +332,13 @@
 
       if (estado === "OK") {
         titulo = (r.tipo === "SALIDA" ? "✅ SALIDA REGISTRADA" : "✅ ENTRADA REGISTRADA");
-        colorTitulo = "text-emerald-400";
+        colorTitulo = r.tipo === "SALIDA" ? "text-indigo-300" : "text-emerald-400";
         iconoEstado = r.tipo === "SALIDA" ? "fa-arrow-right-from-bracket" : "fa-arrow-right-to-bracket";
-        glowClass = "glow-emerald";
+        glowClass = r.tipo === "SALIDA" ? "glow-indigo" : "glow-emerald";
       } else if (estado === "DUPLICADO") {
         colorTitulo = "text-amber-400";
         iconoEstado = "fa-triangle-exclamation";
+        if (r.tipo) titulo = "⚠️ YA REGISTRADO (" + r.tipo + ")";
         glowClass = "glow-amber";
       } else if (estado.includes("ERROR") || estado.includes("INVALIDO") || estado.includes("NO_ENCONTRADO")) {
         colorTitulo = "text-red-400";
@@ -312,7 +372,7 @@
       if (iconoEstado) {
         const iconWrap = document.createElement("div");
         iconWrap.className = "w-14 h-14 rounded-full flex items-center justify-center border-2 " +
-          (estado === "OK" ? "bg-emerald-500/10 border-emerald-500/30" :
+          (estado === "OK" ? (r.tipo === "SALIDA" ? "bg-indigo-500/10 border-indigo-500/30" : "bg-emerald-500/10 border-emerald-500/30") :
            estado === "DUPLICADO" || estado === "INACTIVO" ? "bg-amber-500/10 border-amber-500/30" :
            "bg-red-500/10 border-red-500/30");
         const icon = document.createElement("i");
@@ -336,6 +396,7 @@
         linea(header, "Código: " + r.codigo, "font-mono text-lg text-slate-300");
       }
       if (r.hora) linea(header, "🕒 " + r.hora, "mt-4 text-lg font-mono text-slate-400");
+      if (r.aviso) linea(header, "⚠️ " + r.aviso, "mt-3 text-sm font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2");
 
       caja.appendChild(header);
 
@@ -395,7 +456,8 @@
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
-        osc.frequency.value = r.estado === "OK" ? 880 : 220;
+        // Tono más grave para SALIDA, para distinguirla de la ENTRADA sin mirar la pantalla
+        osc.frequency.value = r.estado === "OK" ? (r.tipo === "SALIDA" ? 660 : 880) : 220;
         osc.connect(ctx.destination);
         osc.start();
         setTimeout(() => { osc.stop(); ctx.close(); }, r.estado === "OK" ? 150 : 400);
@@ -433,7 +495,15 @@
     }
 
     $("btnCamara").addEventListener("click", () => camaraActiva ? detenerCamara() : iniciarCamara());
-    $("btnFoto").addEventListener("click", () => $("inputFoto").click());
+
+    document.querySelectorAll("#selectorModo button").forEach(b => {
+      b.addEventListener("click", () => cambiarModo(b.dataset.modo));
+    });
+    aplicarModo();
+
+    // El botón "Foto" está comentado en el HTML; este código solo actúa si lo vuelves a activar
+    const btnFoto = $("btnFoto");
+    if (btnFoto) btnFoto.addEventListener("click", () => $("inputFoto").click());
     $("inputFoto").addEventListener("change", async e => {
       const archivo = e.target.files[0];
       if (!archivo) return;
