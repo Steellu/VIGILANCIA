@@ -6,67 +6,184 @@
   <title>Control de Acceso | Escáner</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-</head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes scanline { 0% { top: 0; } 50% { top: calc(100% - 4px); } 100% { top: 0; } }
+    @keyframes pulseRing { 0% { transform: scale(0.95); opacity: 0.7; } 50% { transform: scale(1.05); opacity: 0.3; } 100% { transform: scale(0.95); opacity: 0.7; } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes bounceIn { 0% { opacity: 0; transform: scale(0.8); } 60% { opacity: 1; transform: scale(1.05); } 100% { transform: scale(1); } }
 
-  <!-- BARRA DE NAVEGACIÓN UNIFICADA -->
-  <nav class="bg-slate-900 border-b border-slate-800 shadow-md">
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .animate-fade-up { animation: fadeUp 0.5s ease-out forwards; }
+    .animate-slide-in { animation: slideIn 0.4s ease-out forwards; }
+    .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+    .scan-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+    .scan-overlay::before {
+      content: ''; position: absolute; left: 10%; right: 10%; height: 3px;
+      background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+      box-shadow: 0 0 12px #38bdf8, 0 0 24px #38bdf8aa;
+      animation: scanline 2.5s ease-in-out infinite;
+    }
+    .scan-corners::before, .scan-corners::after,
+    .scan-corners > span::before, .scan-corners > span::after {
+      content: ''; position: absolute; width: 28px; height: 28px;
+      border: 3px solid #38bdf8; border-radius: 4px; pointer-events: none;
+    }
+    .scan-corners::before { top: 12px; left: 12px; border-right: none; border-bottom: none; }
+    .scan-corners::after { top: 12px; right: 12px; border-left: none; border-bottom: none; }
+    .scan-corners > span::before { bottom: 12px; left: 12px; border-right: none; border-top: none; }
+    .scan-corners > span::after { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+
+    .glass {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    }
+    .glow-sky { box-shadow: 0 0 20px rgba(56, 189, 248, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4); }
+    .glow-emerald { box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4); }
+    .glow-red { box-shadow: 0 0 20px rgba(239, 68, 68, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4); }
+    .glow-amber { box-shadow: 0 0 20px rgba(245, 158, 11, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4); }
+
+    .shimmer {
+      background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.15), transparent);
+      background-size: 200% 100%; animation: shimmer 1.8s infinite;
+    }
+
+    .btn-press { transition: all 0.15s ease; }
+    .btn-press:active { transform: scale(0.96); }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #38bdf8, #0ea5e9, #06b6d4);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    .nav-link { position: relative; }
+    .nav-link::after {
+      content: ''; position: absolute; bottom: -2px; left: 50%; width: 0; height: 2px;
+      background: #38bdf8; transition: all 0.3s ease; transform: translateX(-50%);
+    }
+    .nav-link:hover::after { width: 100%; }
+    .nav-link.active::after { width: 100%; }
+
+    .result-card { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+    ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.3); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.5); }
+
+    .bg-grid {
+      background-image: radial-gradient(circle at 1px 1px, rgba(56, 189, 248, 0.07) 1px, transparent 0);
+      background-size: 32px 32px;
+    }
+
+    .status-dot { animation: pulseRing 2s ease-in-out infinite; }
+
+    #reader video { border-radius: 0.75rem; object-fit: cover; }
+    #reader { border-radius: 0.75rem; overflow: hidden; }
+  </style>
+  <meta property="og:image" content="https://bolt.new/static/og_default.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col bg-grid">
+
+  <!-- BARRA DE NAVEGACIÓN -->
+  <nav class="glass border-b border-slate-800/80 sticky top-0 z-50 shadow-lg shadow-black/20">
     <div class="max-w-5xl mx-auto px-4 flex justify-between items-center h-16">
-      <div class="font-bold tracking-wide flex items-center gap-2 text-sky-400 text-lg">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-        CONTROL DE ACCESO
+      <div class="font-bold tracking-wide flex items-center gap-2.5 text-lg">
+        <div class="relative">
+          <div class="absolute inset-0 bg-sky-500/20 rounded-lg blur-md"></div>
+          <i class="fa-solid fa-shield-halved text-sky-400 text-xl relative z-10"></i>
+        </div>
+        <span class="gradient-text">CONTROL DE ACCESO</span>
       </div>
-      <div class="flex gap-4">
-        <a href="index.html" class="text-sky-400 font-semibold border-b-2 border-sky-400 pb-1 text-sm transition">Escáner</a>
-        <a href="generador.html" class="text-slate-400 hover:text-sky-300 font-medium pb-1 text-sm transition">Generador QR</a>
+      <div class="flex gap-6">
+        <a href="index.html" class="nav-link active text-sky-400 font-semibold text-sm transition flex items-center gap-1.5">
+          <i class="fa-solid fa-qrcode text-xs"></i> Escáner
+        </a>
+        <a href="generador.html" class="nav-link text-slate-400 hover:text-sky-300 font-medium text-sm transition flex items-center gap-1.5">
+          <i class="fa-solid fa-barcode text-xs"></i> Generador QR
+        </a>
       </div>
     </div>
   </nav>
 
-  <div class="max-w-5xl mx-auto p-4 grid gap-6 md:grid-cols-2 flex-grow w-full mt-4">
-    <!-- Columna izquierda: cámara -->
-    <section class="space-y-4">
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="max-w-5xl mx-auto p-4 grid gap-6 md:grid-cols-2 flex-grow w-full mt-6">
+
+    <!-- ===== COLUMNA IZQUIERDA: CÁMARA ===== -->
+    <section class="space-y-4 animate-fade-up" style="animation-delay: 0.1s; opacity: 0;">
       <div class="flex gap-2">
-        <button id="btnCamara" class="flex-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-sky-900/50 transition-all">
-          ▶ INICIAR CÁMARA
+        <button id="btnCamara" class="btn-press flex-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-sky-900/50 transition-all flex items-center justify-center gap-2">
+          <i class="fa-solid fa-play"></i> INICIAR CÁMARA
         </button>
-        <button id="btnFoto" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-semibold py-4 px-4 border border-slate-700 rounded-xl text-sm shadow transition-all">
-          📷 Foto
-        </button>
+        <!-- <button id="btnFoto" class="btn-press bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-semibold py-4 px-5 border border-slate-700 rounded-xl text-sm shadow transition-all flex items-center gap-2">
+          <i class="fa-solid fa-camera"></i> Foto
+        </button> -->
       </div>
       <input type="file" id="inputFoto" accept="image/*" capture="environment" class="hidden">
 
-      <div id="contenedorLector" class="hidden bg-black rounded-xl overflow-hidden shadow-inner border border-slate-800 ring-4 ring-black/50">
+      <div id="contenedorLector" class="hidden bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800 ring-4 ring-sky-500/10 relative">
+        <div class="scan-overlay"></div>
+        <div class="scan-corners absolute inset-0 z-10"><span></span></div>
         <div id="reader" class="w-full"></div>
       </div>
       <div id="lectorArchivo" class="hidden"></div>
 
-      <p id="pista" class="text-sm text-slate-500 text-center">
-        Pulsa “Iniciar cámara” y acerca el QR del carnet.
-      </p>
+      <div class="flex items-center justify-center gap-2 text-sm text-slate-500">
+        <div class="w-2 h-2 rounded-full bg-sky-500 status-dot"></div>
+        <span id="pista">Pulsa "Iniciar cámara" y acerca el QR del carnet.</span>
+      </div>
     </section>
 
-    <!-- Columna derecha: resultado + historial -->
-    <section class="space-y-4">
-      <div id="resultado" class="rounded-xl p-6 bg-slate-900 border border-slate-800 min-h-[220px] flex flex-col justify-center text-center shadow-lg transition-colors duration-300">
-        <p class="text-slate-500 font-medium tracking-wide">Esperando lectura…</p>
+    <!-- ===== COLUMNA DERECHA: RESULTADO + HISTORIAL ===== -->
+    <section class="space-y-4 animate-fade-up" style="animation-delay: 0.2s; opacity: 0;">
+
+      <!-- RESULTADO -->
+      <div id="resultado" class="result-card rounded-2xl p-6 bg-slate-900/80 border border-slate-800 min-h-[240px] flex flex-col justify-center text-center shadow-lg glow-sky">
+        <div class="flex flex-col items-center gap-3">
+          <div class="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
+            <i class="fa-solid fa-qrcode text-2xl text-slate-600"></i>
+          </div>
+          <p class="text-slate-500 font-medium tracking-wide">Esperando lectura…</p>
+        </div>
       </div>
 
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
-        <h2 class="font-semibold text-slate-400 mb-3 text-sm uppercase tracking-wider">Últimos registros</h2>
-        <ul id="historial" class="divide-y divide-slate-800 text-sm">
+      <!-- HISTORIAL -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg glow-sky">
+        <h2 class="font-semibold text-slate-400 mb-3 text-xs uppercase tracking-widest flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-sky-500"></i>
+          Últimos registros
+        </h2>
+        <ul id="historial" class="divide-y divide-slate-800/60 text-sm">
           <li class="py-3 text-slate-600 italic text-center">Sin registros todavía</li>
         </ul>
       </div>
     </section>
   </div>
 
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/50 mt-auto">
+    <div class="max-w-5xl mx-auto px-4 py-4 text-center text-xs text-slate-600">
+      <span class="flex items-center justify-center gap-2">
+        <i class="fa-solid fa-shield-halved text-sky-800"></i>
+        Sistema de Control de Acceso — Vigilancia
+      </span>
+    </div>
+  </footer>
+
   <script>
     // ======== REEMPLAZA CON TU URL DE API ========
     const API_URL = "https://script.google.com/macros/s/AKfycbynV8QER-iZcVsVG5sLbx_jjX80glQcxOfegaVHgICVx5Q2eDU0usIvxhvY6yvjfpFpIQ/exec";
-    const PUNTO_CONTROL = "Vigilancia";   
-    const COOLDOWN_MS = 4000;             
-    const MOSTRAR_MS = 6000;              
+    const PUNTO_CONTROL = "Vigilancia";
+    const COOLDOWN_MS = 4000;
+    const MOSTRAR_MS = 6000;
 
     const $ = id => document.getElementById(id);
     let scanner = null, camaraActiva = false, procesando = false;
@@ -146,44 +263,86 @@
       clearTimeout(temporizador);
       const caja = $("resultado");
       const est = ESTILOS[estado] || ESTILOS.ERROR;
-      caja.className = "rounded-xl p-6 min-h-[220px] flex flex-col justify-center text-center shadow-lg border transition-all duration-300 " + est.caja;
+      caja.className = "result-card rounded-2xl p-6 min-h-[240px] flex flex-col justify-center text-center shadow-lg border transition-all duration-400 " + est.caja;
       caja.innerHTML = "";
 
       let titulo = est.titulo;
       let colorTitulo = "text-white";
-      
+      let iconoEstado = "";
+      let glowClass = "glow-sky";
+
       if (estado === "OK") {
         titulo = (r.tipo === "SALIDA" ? "✅ SALIDA REGISTRADA" : "✅ ENTRADA REGISTRADA");
         colorTitulo = "text-emerald-400";
+        iconoEstado = r.tipo === "SALIDA" ? "fa-arrow-right-from-bracket" : "fa-arrow-right-to-bracket";
+        glowClass = "glow-emerald";
       } else if (estado === "DUPLICADO") {
         colorTitulo = "text-amber-400";
+        iconoEstado = "fa-triangle-exclamation";
+        glowClass = "glow-amber";
       } else if (estado.includes("ERROR") || estado.includes("INVALIDO") || estado.includes("NO_ENCONTRADO")) {
         colorTitulo = "text-red-400";
+        iconoEstado = "fa-circle-xmark";
+        glowClass = "glow-red";
       } else if (estado === "INACTIVO") {
         colorTitulo = "text-orange-400";
+        iconoEstado = "fa-user-slash";
+        glowClass = "glow-amber";
       }
 
-      linea(caja, titulo, "text-2xl font-extrabold mb-4 tracking-wide " + colorTitulo);
+      caja.classList.add(glowClass);
+
+      if (estado === "CARGANDO") {
+        const wrap = document.createElement("div");
+        wrap.className = "flex flex-col items-center gap-3";
+        const spinner = document.createElement("div");
+        spinner.className = "w-12 h-12 rounded-full border-4 border-sky-800 border-t-sky-400 animate-spin";
+        wrap.appendChild(spinner);
+        const txt = document.createElement("p");
+        txt.className = "text-sky-400 font-semibold tracking-wide";
+        txt.textContent = "Consultando…";
+        wrap.appendChild(txt);
+        caja.appendChild(wrap);
+        return;
+      }
+
+      const header = document.createElement("div");
+      header.className = "flex flex-col items-center gap-3 animate-bounce-in";
+
+      if (iconoEstado) {
+        const iconWrap = document.createElement("div");
+        iconWrap.className = "w-14 h-14 rounded-full flex items-center justify-center border-2 " +
+          (estado === "OK" ? "bg-emerald-500/10 border-emerald-500/30" :
+           estado === "DUPLICADO" || estado === "INACTIVO" ? "bg-amber-500/10 border-amber-500/30" :
+           "bg-red-500/10 border-red-500/30");
+        const icon = document.createElement("i");
+        icon.className = "fa-solid " + iconoEstado + " text-2xl " + colorTitulo;
+        iconWrap.appendChild(icon);
+        header.appendChild(iconWrap);
+      }
+
+      linea(header, titulo, "text-2xl font-extrabold mb-2 tracking-wide " + colorTitulo);
 
       if (estado === "ERROR" || estado === "QR_INVALIDO") {
-        linea(caja, r.mensaje || "", "text-base text-slate-300");
+        linea(header, r.mensaje || "", "text-base text-slate-300");
       }
-      
+
       if (r.datos) {
-        // Concatenamos los nombres con el paterno y materno
         const nombreCompleto = `${r.datos.nombres} ${r.datos.apellidoPaterno} ${r.datos.apellidoMaterno}`.trim();
-        linea(caja, "👤 " + nombreCompleto, "text-xl font-bold text-slate-100");
-        linea(caja, "DNI: " + r.datos.dni, "text-slate-400 mt-2");
-        linea(caja, "Área: " + r.datos.area, "text-slate-400");
+        linea(header, nombreCompleto, "text-xl font-bold text-slate-100 flex items-center gap-2");
+        linea(header, "DNI: " + r.datos.dni, "text-slate-400 mt-2 text-sm");
+        linea(header, "Área: " + r.datos.area, "text-slate-400 text-sm");
       } else if (r.codigo) {
-        linea(caja, "Código: " + r.codigo, "font-mono text-lg text-slate-300");
+        linea(header, "Código: " + r.codigo, "font-mono text-lg text-slate-300");
       }
-      if (r.hora) linea(caja, "🕒 " + r.hora, "mt-4 text-lg font-mono text-slate-400");
+      if (r.hora) linea(header, "🕒 " + r.hora, "mt-4 text-lg font-mono text-slate-400");
+
+      caja.appendChild(header);
 
       if (estado !== "CARGANDO") {
         temporizador = setTimeout(() => {
-          caja.className = "rounded-xl p-6 bg-slate-900 border border-slate-800 min-h-[220px] flex flex-col justify-center text-center shadow-lg transition-all duration-300";
-          caja.innerHTML = '<p class="text-slate-500 font-medium tracking-wide">Esperando lectura…</p>';
+          caja.className = "result-card rounded-2xl p-6 bg-slate-900/80 border border-slate-800 min-h-[240px] flex flex-col justify-center text-center shadow-lg glow-sky transition-all duration-400";
+          caja.innerHTML = '<div class="flex flex-col items-center gap-3"><div class="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700"><i class="fa-solid fa-qrcode text-2xl text-slate-600"></i></div><p class="text-slate-500 font-medium tracking-wide">Esperando lectura…</p></div>';
         }, MOSTRAR_MS);
       }
     }
@@ -191,7 +350,7 @@
     function linea(padre, texto, clases) {
       const p = document.createElement("p");
       p.className = clases;
-      p.textContent = texto;       
+      p.textContent = texto;
       padre.appendChild(p);
     }
 
@@ -201,15 +360,30 @@
       if (historial.length > 8) historial.pop();
       const ul = $("historial");
       ul.innerHTML = "";
-      historial.forEach(h => {
+      historial.forEach((h, i) => {
         const li = document.createElement("li");
-        li.className = "py-3 flex justify-between items-center gap-2";
+        li.className = "py-3 flex justify-between items-center gap-2 animate-slide-in";
+        li.style.animationDelay = (i * 0.05) + "s";
+        li.style.opacity = "0";
+
         const izq = document.createElement("span");
-        izq.className = "text-slate-300 font-medium";
-        izq.textContent = h.hora + "  " + h.nombre;
+        izq.className = "text-slate-300 font-medium flex items-center gap-2";
+        const reloj = document.createElement("i");
+        reloj.className = "fa-regular fa-clock text-slate-600 text-xs";
+        izq.appendChild(reloj);
+        const txt = document.createElement("span");
+        txt.textContent = h.hora + "  " + h.nombre;
+        izq.appendChild(txt);
+
         const der = document.createElement("span");
-        der.className = h.estado === "OK" ? "text-emerald-400 font-bold text-xs px-2 py-1 bg-emerald-400/10 rounded uppercase" : "text-red-400 font-bold text-xs px-2 py-1 bg-red-400/10 rounded uppercase";
-        der.textContent = h.estado === "OK" ? h.tipo : h.estado.replace("_", " ");
+        der.className = h.estado === "OK"
+          ? "text-emerald-400 font-bold text-xs px-2.5 py-1 bg-emerald-400/10 rounded-lg uppercase flex items-center gap-1.5"
+          : "text-red-400 font-bold text-xs px-2.5 py-1 bg-red-400/10 rounded-lg uppercase flex items-center gap-1.5";
+        const dotHist = document.createElement("span");
+        dotHist.className = "w-1.5 h-1.5 rounded-full " + (h.estado === "OK" ? "bg-emerald-400" : "bg-red-400");
+        der.appendChild(dotHist);
+        der.appendChild(document.createTextNode(h.estado === "OK" ? h.tipo : h.estado.replace("_", " ")));
+
         li.appendChild(izq);
         li.appendChild(der);
         ul.appendChild(li);
@@ -241,8 +415,8 @@
           () => {}
         );
         camaraActiva = true;
-        $("btnCamara").textContent = "■ DETENER CÁMARA";
-        $("btnCamara").className = "flex-1 bg-red-600 hover:bg-red-500 active:bg-red-800 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-red-900/50 transition-all";
+        $("btnCamara").innerHTML = '<i class="fa-solid fa-stop"></i> DETENER CÁMARA';
+        $("btnCamara").className = "btn-press flex-1 bg-red-600 hover:bg-red-500 active:bg-red-800 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-red-900/50 transition-all flex items-center justify-center gap-2";
       } catch (err) {
         $("contenedorLector").classList.add("hidden");
         alert("No se pudo abrir la cámara. Verifica los permisos.");
@@ -254,8 +428,8 @@
       try { await scanner.stop(); } catch (e) {}
       camaraActiva = false;
       $("contenedorLector").classList.add("hidden");
-      $("btnCamara").textContent = "▶ INICIAR CÁMARA";
-      $("btnCamara").className = "flex-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-sky-900/50 transition-all";
+      $("btnCamara").innerHTML = '<i class="fa-solid fa-play"></i> INICIAR CÁMARA';
+      $("btnCamara").className = "btn-press flex-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-sky-900/50 transition-all flex items-center justify-center gap-2";
     }
 
     $("btnCamara").addEventListener("click", () => camaraActiva ? detenerCamara() : iniciarCamara());
@@ -266,7 +440,7 @@
       try {
         const lector = new Html5Qrcode("lectorArchivo");
         const texto = await lector.scanFile(archivo, false);
-        ultimoCodigo = ""; 
+        ultimoCodigo = "";
         await procesarLectura(texto);
       } catch (err) {
         mostrarEstado("ERROR", { mensaje: "No se detectó un QR en la foto." });
