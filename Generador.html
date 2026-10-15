@@ -3,39 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Generador de QR de empleados</title>
+  <title>Control de Acceso | Generador QR</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     @media print {
       body { background: #fff !important; }
-      .tarjeta { break-inside: avoid; page-break-inside: avoid; }
+      .tarjeta { break-inside: avoid; page-break-inside: avoid; border: 1px solid #e2e8f0; }
+      nav { display: none !important; }
     }
   </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <div class="max-w-6xl mx-auto p-4">
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
 
-    <div class="print:hidden mb-4 space-y-3">
-      <h1 class="text-2xl font-bold text-blue-900">Generador de QR de empleados</h1>
-      <p class="text-sm text-gray-600">
-        Carga los empleados ACTIVOS desde la hoja, filtra por área si quieres y usa “Imprimir”
-        (o “Guardar como PDF”) para obtener los carnets.
+  <!-- BARRA DE NAVEGACIÓN UNIFICADA -->
+  <nav class="bg-slate-900 shadow-md print:hidden">
+    <div class="max-w-6xl mx-auto px-4 flex justify-between items-center h-16">
+      <div class="font-bold tracking-wide flex items-center gap-2 text-sky-400 text-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" /></svg>
+        CONTROL DE ACCESO
+      </div>
+      <div class="flex gap-4">
+        <a href="index.html" class="text-slate-400 hover:text-sky-300 font-medium pb-1 text-sm transition">Escáner</a>
+        <a href="generador.html" class="text-sky-400 font-semibold border-b-2 border-sky-400 pb-1 text-sm transition">Generador QR</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-6xl mx-auto p-6 flex-grow w-full">
+
+    <div class="print:hidden mb-8 space-y-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+      <h1 class="text-2xl font-bold text-slate-800">Generador de Credenciales QR</h1>
+      <p class="text-sm text-slate-600">
+        Carga los empleados ACTIVOS desde la base de datos, filtra por área si lo requieres y utiliza el botón "Imprimir" (o Guarda como PDF) para obtener los carnets listos para entregar.
       </p>
-      <div class="flex flex-wrap gap-2 items-center">
-        <button id="btnCargar" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Cargar empleados</button>
-        <select id="filtroArea" class="border rounded-lg py-2 px-3 bg-white" disabled>
+      <div class="flex flex-wrap gap-3 items-center pt-2">
+        <button id="btnCargar" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 px-5 rounded-lg shadow transition-colors">
+          Cargar empleados
+        </button>
+        <select id="filtroArea" class="border border-slate-300 rounded-lg py-2.5 px-4 bg-slate-50 text-slate-700 shadow-sm focus:ring-2 focus:ring-sky-500 focus:outline-none" disabled>
           <option value="">Todas las áreas</option>
         </select>
-        <button id="btnImprimir" class="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg" disabled>Imprimir / PDF</button>
-        <span id="contador" class="text-sm text-gray-600"></span>
+        <button id="btnImprimir" class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-5 rounded-lg shadow transition-colors" disabled>
+          🖨️ Imprimir / PDF
+        </button>
+        <span id="contador" class="text-sm font-semibold text-slate-500 ml-auto bg-slate-100 px-3 py-1 rounded-full border border-slate-200"></span>
       </div>
     </div>
 
-    <div id="grilla" class="grid gap-3 grid-cols-2 md:grid-cols-3 print:grid-cols-3"></div>
+    <div id="grilla" class="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 print:grid-cols-3"></div>
   </div>
 
   <script>
+    // ======== REEMPLAZA CON TU URL DE API ========
     const API_URL = "https://script.google.com/macros/s/AKfycbynV8QER-iZcVsVG5sLbx_jjX80glQcxOfegaVHgICVx5Q2eDU0usIvxhvY6yvjfpFpIQ/exec";
 
     const $ = id => document.getElementById(id);
@@ -103,29 +123,31 @@
 
       lista.forEach(e => {
         const tarjeta = document.createElement("div");
-        tarjeta.className = "tarjeta bg-white border rounded-xl p-3 flex flex-col items-center text-center";
+        tarjeta.className = "tarjeta bg-white border border-slate-200 rounded-xl p-5 flex flex-col items-center text-center shadow-sm";
 
         const qrBox = document.createElement("div");
+        qrBox.className = "p-2 bg-white rounded-lg border border-slate-100 mb-3 shadow-inner";
         tarjeta.appendChild(qrBox);
 
-        // Datos dentro del QR (sin tildes para un QR más limpio). f = firma de seguridad.
         const payload = JSON.stringify({
           c: e.codigo,
           d: e.dni,
-          n: sinTildes(e.nombres + " " + e.apellidos),
+          n: sinTildes(e.nombres + " " + e.apellidoPaterno), // Solo nombre y un apellido para no saturar los puntitos del QR
           a: sinTildes(e.area),
           f: e.firma
         });
-        new QRCode(qrBox, { text: payload, width: 170, height: 170, correctLevel: QRCode.CorrectLevel.M });
+        new QRCode(qrBox, { text: payload, width: 160, height: 160, colorDark: "#0f172a", correctLevel: QRCode.CorrectLevel.M });
 
         const nombre = document.createElement("p");
-        nombre.className = "font-bold mt-2 text-sm";
-        nombre.textContent = e.nombres + " " + e.apellidos;
+        nombre.className = "font-bold mt-1 text-sm text-slate-800 leading-tight";
+        nombre.textContent = e.nombres + " " + e.apellidoPaterno + " " + e.apellidoMaterno;
+        
         const detalle = document.createElement("p");
-        detalle.className = "text-xs text-gray-600";
+        detalle.className = "text-xs text-slate-500 mt-1 font-mono";
         detalle.textContent = e.codigo + " · DNI " + e.dni;
+        
         const areaTxt = document.createElement("p");
-        areaTxt.className = "text-xs text-gray-600";
+        areaTxt.className = "text-xs font-semibold text-sky-600 mt-2 bg-sky-50 px-2 py-1 rounded";
         areaTxt.textContent = e.area;
 
         tarjeta.appendChild(nombre);

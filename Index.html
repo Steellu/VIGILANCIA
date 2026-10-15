@@ -3,76 +3,86 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control de Acceso</title>
+  <title>Control de Acceso | Escáner</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen">
-  <div class="max-w-5xl mx-auto p-4 grid gap-4 md:grid-cols-2">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
 
+  <!-- BARRA DE NAVEGACIÓN UNIFICADA -->
+  <nav class="bg-slate-900 border-b border-slate-800 shadow-md">
+    <div class="max-w-5xl mx-auto px-4 flex justify-between items-center h-16">
+      <div class="font-bold tracking-wide flex items-center gap-2 text-sky-400 text-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+        CONTROL DE ACCESO
+      </div>
+      <div class="flex gap-4">
+        <a href="index.html" class="text-sky-400 font-semibold border-b-2 border-sky-400 pb-1 text-sm transition">Escáner</a>
+        <a href="generador.html" class="text-slate-400 hover:text-sky-300 font-medium pb-1 text-sm transition">Generador QR</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto p-4 grid gap-6 md:grid-cols-2 flex-grow w-full mt-4">
     <!-- Columna izquierda: cámara -->
-    <section class="space-y-3">
-      <h1 class="text-2xl font-bold tracking-wide text-sky-300">CONTROL DE ACCESO</h1>
-
+    <section class="space-y-4">
       <div class="flex gap-2">
-        <button id="btnCamara" class="flex-1 bg-sky-600 active:bg-sky-800 text-white font-bold py-4 rounded-xl text-lg shadow">
+        <button id="btnCamara" class="flex-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-sky-900/50 transition-all">
           ▶ INICIAR CÁMARA
         </button>
-        <button id="btnFoto" class="bg-slate-700 active:bg-slate-600 text-white font-semibold py-4 px-4 rounded-xl text-sm shadow">
+        <button id="btnFoto" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-semibold py-4 px-4 border border-slate-700 rounded-xl text-sm shadow transition-all">
           📷 Foto
         </button>
       </div>
       <input type="file" id="inputFoto" accept="image/*" capture="environment" class="hidden">
 
-      <div id="contenedorLector" class="hidden bg-black rounded-xl overflow-hidden shadow-inner">
+      <div id="contenedorLector" class="hidden bg-black rounded-xl overflow-hidden shadow-inner border border-slate-800 ring-4 ring-black/50">
         <div id="reader" class="w-full"></div>
       </div>
       <div id="lectorArchivo" class="hidden"></div>
 
-      <p id="pista" class="text-sm text-slate-400">
-        Pulsa “Iniciar cámara” y acerca el QR del carnet. Los registros se guardan automáticamente.
+      <p id="pista" class="text-sm text-slate-500 text-center">
+        Pulsa “Iniciar cámara” y acerca el QR del carnet.
       </p>
     </section>
 
     <!-- Columna derecha: resultado + historial -->
-    <section class="space-y-3">
-      <div id="resultado" class="rounded-xl p-5 bg-slate-800 min-h-[220px] flex flex-col justify-center text-center">
-        <p class="text-slate-400">Esperando lectura…</p>
+    <section class="space-y-4">
+      <div id="resultado" class="rounded-xl p-6 bg-slate-900 border border-slate-800 min-h-[220px] flex flex-col justify-center text-center shadow-lg transition-colors duration-300">
+        <p class="text-slate-500 font-medium tracking-wide">Esperando lectura…</p>
       </div>
 
-      <div class="bg-slate-800 rounded-xl p-4">
-        <h2 class="font-semibold text-slate-300 mb-2">Últimos registros (esta sesión)</h2>
-        <ul id="historial" class="divide-y divide-slate-700 text-sm">
-          <li class="py-2 text-slate-500">Sin registros todavía</li>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+        <h2 class="font-semibold text-slate-400 mb-3 text-sm uppercase tracking-wider">Últimos registros</h2>
+        <ul id="historial" class="divide-y divide-slate-800 text-sm">
+          <li class="py-3 text-slate-600 italic text-center">Sin registros todavía</li>
         </ul>
       </div>
     </section>
   </div>
 
   <script>
-    // ======== CONFIGURACIÓN ========
+    // ======== REEMPLAZA CON TU URL DE API ========
     const API_URL = "https://script.google.com/macros/s/AKfycbynV8QER-iZcVsVG5sLbx_jjX80glQcxOfegaVHgICVx5Q2eDU0usIvxhvY6yvjfpFpIQ/exec";
-    const PUNTO_CONTROL = "Vigilancia";   // se guarda en la columna "Punto de control"
-    const COOLDOWN_MS = 4000;             // ignora el mismo QR durante este tiempo
-    const MOSTRAR_MS = 6000;              // tiempo que queda visible el resultado
+    const PUNTO_CONTROL = "Vigilancia";   
+    const COOLDOWN_MS = 4000;             
+    const MOSTRAR_MS = 6000;              
 
-    // ======== ESTADO ========
     const $ = id => document.getElementById(id);
     let scanner = null, camaraActiva = false, procesando = false;
     let ultimoCodigo = "", ultimoTs = 0, temporizador = null;
     const historial = [];
 
     const ESTILOS = {
-      OK:            { caja: "bg-green-600",  titulo: "" },
-      DUPLICADO:     { caja: "bg-yellow-500 text-black", titulo: "⚠️ YA REGISTRADO" },
-      INACTIVO:      { caja: "bg-orange-600", titulo: "🟠 EMPLEADO INACTIVO" },
-      NO_ENCONTRADO: { caja: "bg-red-600",    titulo: "🔴 EMPLEADO NO ENCONTRADO" },
-      QR_INVALIDO:   { caja: "bg-red-700",    titulo: "⛔ QR NO VÁLIDO" },
-      ERROR:         { caja: "bg-red-700",    titulo: "❌ ERROR" },
-      CARGANDO:      { caja: "bg-slate-700",  titulo: "Consultando…" }
+      OK:            { caja: "bg-emerald-900/40 border-emerald-500/50",  titulo: "" },
+      DUPLICADO:     { caja: "bg-amber-900/40 border-amber-500/50", titulo: "⚠️ YA REGISTRADO" },
+      INACTIVO:      { caja: "bg-orange-900/40 border-orange-500/50", titulo: "🟠 EMPLEADO INACTIVO" },
+      NO_ENCONTRADO: { caja: "bg-red-900/40 border-red-500/50",    titulo: "🔴 EMPLEADO NO ENCONTRADO" },
+      QR_INVALIDO:   { caja: "bg-red-900/40 border-red-500/50",    titulo: "⛔ QR NO VÁLIDO" },
+      ERROR:         { caja: "bg-red-900/40 border-red-500/50",    titulo: "❌ ERROR" },
+      CARGANDO:      { caja: "bg-sky-900/20 border-sky-800",  titulo: "Consultando…" }
     };
 
-    // ======== CLAVE (se guarda en la tableta, no en el código) ========
     function obtenerClave(forzar) {
       let clave = "";
       try { clave = localStorage.getItem("clave_vigilancia") || ""; } catch (e) {}
@@ -83,9 +93,6 @@
       return clave;
     }
 
-    // ======== LECTURA DEL QR ========
-    // El QR trae JSON {c,d,n,a,f}. Solo se usan c (código) y f (firma);
-    // los datos mostrados siempre vienen de la base de datos.
     function interpretarQR(texto) {
       const t = String(texto).trim();
       try {
@@ -97,7 +104,7 @@
 
     async function registrar(codigo, firma) {
       const clave = obtenerClave(false);
-      if (!clave) return { ok: false, estado: "ERROR", mensaje: "Falta la clave de vigilancia. Recarga la página." };
+      if (!clave) return { ok: false, estado: "ERROR", mensaje: "Falta la clave. Recarga la página." };
       const resp = await fetch(API_URL, {
         method: "POST",
         body: JSON.stringify({ accion: "registrar", codigo, firma, punto: PUNTO_CONTROL, clave })
@@ -105,7 +112,7 @@
       const datos = await resp.json();
       if (datos.estado === "CLAVE_INVALIDA") {
         try { localStorage.removeItem("clave_vigilancia"); } catch (e) {}
-        datos.mensaje = "Clave incorrecta. Vuelve a escanear e ingrésala de nuevo.";
+        datos.mensaje = "Clave incorrecta. Vuelve a escanear.";
         datos.estado = "ERROR";
       }
       return datos;
@@ -126,7 +133,7 @@
       try {
         r = await registrar(codigo, firma);
       } catch (e) {
-        r = { ok: false, estado: "ERROR", mensaje: "Sin conexión con el servidor. NO se guardó el registro." };
+        r = { ok: false, estado: "ERROR", mensaje: "Sin conexión con el servidor." };
       }
       procesando = false;
       ultimoTs = Date.now();
@@ -135,35 +142,48 @@
       agregarHistorial(r, codigo);
     }
 
-    // ======== INTERFAZ ========
     function mostrarEstado(estado, r) {
       clearTimeout(temporizador);
       const caja = $("resultado");
       const est = ESTILOS[estado] || ESTILOS.ERROR;
-      caja.className = "rounded-xl p-5 min-h-[220px] flex flex-col justify-center text-center " + est.caja;
+      caja.className = "rounded-xl p-6 min-h-[220px] flex flex-col justify-center text-center shadow-lg border transition-all duration-300 " + est.caja;
       caja.innerHTML = "";
 
       let titulo = est.titulo;
-      if (estado === "OK") titulo = (r.tipo === "SALIDA" ? "✅ SALIDA REGISTRADA" : "✅ ENTRADA REGISTRADA");
-      if (estado === "DUPLICADO" && r.tipo) titulo = "⚠️ YA REGISTRADO (" + r.tipo + ")";
-      linea(caja, titulo, "text-2xl font-extrabold mb-3");
+      let colorTitulo = "text-white";
+      
+      if (estado === "OK") {
+        titulo = (r.tipo === "SALIDA" ? "✅ SALIDA REGISTRADA" : "✅ ENTRADA REGISTRADA");
+        colorTitulo = "text-emerald-400";
+      } else if (estado === "DUPLICADO") {
+        colorTitulo = "text-amber-400";
+      } else if (estado.includes("ERROR") || estado.includes("INVALIDO") || estado.includes("NO_ENCONTRADO")) {
+        colorTitulo = "text-red-400";
+      } else if (estado === "INACTIVO") {
+        colorTitulo = "text-orange-400";
+      }
+
+      linea(caja, titulo, "text-2xl font-extrabold mb-4 tracking-wide " + colorTitulo);
 
       if (estado === "ERROR" || estado === "QR_INVALIDO") {
-        linea(caja, r.mensaje || "", "text-base");
+        linea(caja, r.mensaje || "", "text-base text-slate-300");
       }
+      
       if (r.datos) {
-        linea(caja, "👤 " + r.datos.nombres + " " + r.datos.apellidos, "text-xl font-bold");
-        linea(caja, "DNI: " + r.datos.dni, "text-lg");
-        linea(caja, "Área: " + r.datos.area, "text-lg");
+        // Concatenamos los nombres con el paterno y materno
+        const nombreCompleto = `${r.datos.nombres} ${r.datos.apellidoPaterno} ${r.datos.apellidoMaterno}`.trim();
+        linea(caja, "👤 " + nombreCompleto, "text-xl font-bold text-slate-100");
+        linea(caja, "DNI: " + r.datos.dni, "text-slate-400 mt-2");
+        linea(caja, "Área: " + r.datos.area, "text-slate-400");
       } else if (r.codigo) {
-        linea(caja, "Código: " + r.codigo, "font-mono text-lg");
+        linea(caja, "Código: " + r.codigo, "font-mono text-lg text-slate-300");
       }
-      if (r.hora) linea(caja, "🕒 " + r.hora, "mt-2 text-lg font-semibold");
+      if (r.hora) linea(caja, "🕒 " + r.hora, "mt-4 text-lg font-mono text-slate-400");
 
       if (estado !== "CARGANDO") {
         temporizador = setTimeout(() => {
-          caja.className = "rounded-xl p-5 bg-slate-800 min-h-[220px] flex flex-col justify-center text-center";
-          caja.innerHTML = '<p class="text-slate-400">Esperando lectura…</p>';
+          caja.className = "rounded-xl p-6 bg-slate-900 border border-slate-800 min-h-[220px] flex flex-col justify-center text-center shadow-lg transition-all duration-300";
+          caja.innerHTML = '<p class="text-slate-500 font-medium tracking-wide">Esperando lectura…</p>';
         }, MOSTRAR_MS);
       }
     }
@@ -171,23 +191,24 @@
     function linea(padre, texto, clases) {
       const p = document.createElement("p");
       p.className = clases;
-      p.textContent = texto;       // textContent evita inyección de HTML
+      p.textContent = texto;       
       padre.appendChild(p);
     }
 
     function agregarHistorial(r, codigo) {
-      const nombre = r.datos ? (r.datos.nombres + " " + r.datos.apellidos) : codigo;
+      const nombre = r.datos ? `${r.datos.nombres} ${r.datos.apellidoPaterno}` : codigo;
       historial.unshift({ hora: r.hora || "--:--:--", nombre: nombre, estado: r.estado, tipo: r.tipo || "" });
       if (historial.length > 8) historial.pop();
       const ul = $("historial");
       ul.innerHTML = "";
       historial.forEach(h => {
         const li = document.createElement("li");
-        li.className = "py-2 flex justify-between gap-2";
+        li.className = "py-3 flex justify-between items-center gap-2";
         const izq = document.createElement("span");
+        izq.className = "text-slate-300 font-medium";
         izq.textContent = h.hora + "  " + h.nombre;
         const der = document.createElement("span");
-        der.className = h.estado === "OK" ? "text-green-400 font-semibold" : "text-red-300 font-semibold";
+        der.className = h.estado === "OK" ? "text-emerald-400 font-bold text-xs px-2 py-1 bg-emerald-400/10 rounded uppercase" : "text-red-400 font-bold text-xs px-2 py-1 bg-red-400/10 rounded uppercase";
         der.textContent = h.estado === "OK" ? h.tipo : h.estado.replace("_", " ");
         li.appendChild(izq);
         li.appendChild(der);
@@ -207,7 +228,6 @@
       } catch (e) {}
     }
 
-    // ======== CÁMARA ========
     async function iniciarCamara() {
       if (camaraActiva) return;
       try {
@@ -222,11 +242,10 @@
         );
         camaraActiva = true;
         $("btnCamara").textContent = "■ DETENER CÁMARA";
-        $("btnCamara").className = "flex-1 bg-red-600 active:bg-red-800 text-white font-bold py-4 rounded-xl text-lg shadow";
+        $("btnCamara").className = "flex-1 bg-red-600 hover:bg-red-500 active:bg-red-800 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-red-900/50 transition-all";
       } catch (err) {
         $("contenedorLector").classList.add("hidden");
-        alert("No se pudo abrir la cámara: " + err +
-              "\n\nVerifica que la página abra con https:// y que Chrome tenga permiso de cámara para este sitio.");
+        alert("No se pudo abrir la cámara. Verifica los permisos.");
       }
     }
 
@@ -236,12 +255,10 @@
       camaraActiva = false;
       $("contenedorLector").classList.add("hidden");
       $("btnCamara").textContent = "▶ INICIAR CÁMARA";
-      $("btnCamara").className = "flex-1 bg-sky-600 active:bg-sky-800 text-white font-bold py-4 rounded-xl text-lg shadow";
+      $("btnCamara").className = "flex-1 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-sky-900/50 transition-all";
     }
 
     $("btnCamara").addEventListener("click", () => camaraActiva ? detenerCamara() : iniciarCamara());
-
-    // Alternativa: tomar una foto del QR con la app de cámara del dispositivo
     $("btnFoto").addEventListener("click", () => $("inputFoto").click());
     $("inputFoto").addEventListener("change", async e => {
       const archivo = e.target.files[0];
@@ -249,10 +266,10 @@
       try {
         const lector = new Html5Qrcode("lectorArchivo");
         const texto = await lector.scanFile(archivo, false);
-        ultimoCodigo = ""; // permite reintentar el mismo QR
+        ultimoCodigo = ""; 
         await procesarLectura(texto);
       } catch (err) {
-        mostrarEstado("ERROR", { mensaje: "No se detectó un QR en la foto. Intenta con más luz y más cerca." });
+        mostrarEstado("ERROR", { mensaje: "No se detectó un QR en la foto." });
       } finally {
         e.target.value = "";
       }
