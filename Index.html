@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de Acceso</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+  <div class="max-w-5xl mx-auto p-4 grid gap-4 md:grid-cols-2">
+
+    <!-- Columna izquierda: cámara -->
+    <section class="space-y-3">
+      <h1 class="text-2xl font-bold tracking-wide text-sky-300">CONTROL DE ACCESO</h1>
+
+      <div class="flex gap-2">
+        <button id="btnCamara" class="flex-1 bg-sky-600 active:bg-sky-800 text-white font-bold py-4 rounded-xl text-lg shadow">
+          ▶ INICIAR CÁMARA
+        </button>
+        <button id="btnFoto" class="bg-slate-700 active:bg-slate-600 text-white font-semibold py-4 px-4 rounded-xl text-sm shadow">
+          📷 Foto
+        </button>
+      </div>
+      <input type="file" id="inputFoto" accept="image/*" capture="environment" class="hidden">
+
+      <div id="contenedorLector" class="hidden bg-black rounded-xl overflow-hidden shadow-inner">
+        <div id="reader" class="w-full"></div>
+      </div>
+      <div id="lectorArchivo" class="hidden"></div>
+
+      <p id="pista" class="text-sm text-slate-400">
+        Pulsa “Iniciar cámara” y acerca el QR del carnet. Los registros se guardan automáticamente.
+      </p>
+    </section>
+
+    <!-- Columna derecha: resultado + historial -->
+    <section class="space-y-3">
+      <div id="resultado" class="rounded-xl p-5 bg-slate-800 min-h-[220px] flex flex-col justify-center text-center">
+        <p class="text-slate-400">Esperando lectura…</p>
+      </div>
+
+      <div class="bg-slate-800 rounded-xl p-4">
+        <h2 class="font-semibold text-slate-300 mb-2">Últimos registros (esta sesión)</h2>
+        <ul id="historial" class="divide-y divide-slate-700 text-sm">
+          <li class="py-2 text-slate-500">Sin registros todavía</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ======== CONFIGURACIÓN ========
+    const API_URL = "https://script.google.com/macros/s/AKfycbynV8QER-iZcVsVG5sLbx_jjX80glQcxOfegaVHgICVx5Q2eDU0usIvxhvY6yvjfpFpIQ/exec";
+    const PUNTO_CONTROL = "Vigilancia";   // se guarda en la columna "Punto de control"
+    const COOLDOWN_MS = 4000;             // ignora el mismo QR durante este tiempo
+    const MOSTRAR_MS = 6000;              // tiempo que queda visible el resultado
+
+    // ======== ESTADO ========
+    const $ = id => document.getElementById(id);
+    let scanner = null, camaraActiva = false, procesando = false;
+    let ultimoCodigo = "", ultimoTs = 0, temporizador = null;
+    const historial = [];
+
+    const ESTILOS = {
+      OK:            { caja: "bg-green-600",  titulo: "" },
+      DUPLICADO:     { caja: "bg-yellow-500 text-black", titulo: "⚠️ YA REGISTRADO" },
+      INACTIVO:      { caja: "bg-orange-600", titulo: "🟠 EMPLEADO INACTIVO" },
+      NO_ENCONTRADO: { caja: "bg-red-600",    titulo: "🔴 EMPLEADO NO ENCONTRADO" },
+      QR_INVALIDO:   { caja: "bg-red-700",    titulo: "⛔ QR NO VÁLIDO" },
+      ERROR:         { caja: "bg-red-700",    titulo: "❌ ERROR" },
+      CARGANDO:      { caja: "bg-slate-700",  titulo: "Consultando…" }
+    };
+
+    // ======== CLAVE (se guarda en la tableta, no en el código) ========
+    function obtenerClave(forzar) {
+      let clave = "";
+      try { clave = localStorage.getItem("clave_vigilancia") || ""; } catch (e) {}
+      if (!clave || forzar) {
+        clave = prompt("Clave de vigilancia:") || "";
+        try { if (clave) localStorage.setItem("clave_vigilancia", clave); } catch (e) {}
+      }
+      return clave;
+    }
+
+    // ======== LECTURA DEL QR ========
+    // El QR trae JSON {c,d,n,a,f}. Solo se usan c (código) y f (firma);
+    // los datos mostrados siempre vienen de la base de datos.
+    function interpretarQR(texto) {
+      const t = String(texto).trim();
+      try {
+        const o = JSON.parse(t);
+        if (o && typeof o === "object" && o.c) return { codigo: String(o.c).trim(), firma: String(o.f || "") };
+      } catch (e) {}
+      return { codigo: t, firma: "" };
+    }
+
+    async function registrar(codigo, firma) {
+      const clave = obtenerClave(false);
+      if (!clave) return { ok: false, estado: "ERROR", mensaje: "Falta la clave de vigilancia. Recarga la página." };
+      const resp = await fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({ accion: "registrar", codigo, firma, punto: PUNTO_CONTROL, clave })
+      });
+      const datos = await resp.json();
+      if (datos.estado === "CLAVE_INVALIDA") {
+        try { localStorage.removeItem("clave_vigilancia"); } catch (e) {}
+        datos.mensaje = "Clave incorrecta. Vuelve a escanear e ingrésala de nuevo.";
+        datos.estado = "ERROR";
+      }
+      return datos;
+    }
+
+    async function procesarLectura(texto) {
+      if (procesando) return;
+      const { codigo, firma } = interpretarQR(texto);
+      const ahora = Date.now();
+      if (codigo === ultimoCodigo && ahora - ultimoTs < COOLDOWN_MS) return;
+
+      procesando = true;
+      ultimoCodigo = codigo;
+      ultimoTs = ahora;
+      mostrarEstado("CARGANDO", {});
+
+      let r;
+      try {
+        r = await registrar(codigo, firma);
+      } catch (e) {
+        r = { ok: false, estado: "ERROR", mensaje: "Sin conexión con el servidor. NO se guardó el registro." };
+      }
+      procesando = false;
+      ultimoTs = Date.now();
+      mostrarEstado(r.estado || "ERROR", r);
+      avisar(r);
+      agregarHistorial(r, codigo);
+    }
+
+    // ======== INTERFAZ ========
+    function mostrarEstado(estado, r) {
+      clearTimeout(temporizador);
+      const caja = $("resultado");
+      const est = ESTILOS[estado] || ESTILOS.ERROR;
+      caja.className = "rounded-xl p-5 min-h-[220px] flex flex-col justify-center text-center " + est.caja;
+      caja.innerHTML = "";
+
+      let titulo = est.titulo;
+      if (estado === "OK") titulo = (r.tipo === "SALIDA" ? "✅ SALIDA REGISTRADA" : "✅ ENTRADA REGISTRADA");
+      if (estado === "DUPLICADO" && r.tipo) titulo = "⚠️ YA REGISTRADO (" + r.tipo + ")";
+      linea(caja, titulo, "text-2xl font-extrabold mb-3");
+
+      if (estado === "ERROR" || estado === "QR_INVALIDO") {
+        linea(caja, r.mensaje || "", "text-base");
+      }
+      if (r.datos) {
+        linea(caja, "👤 " + r.datos.nombres + " " + r.datos.apellidos, "text-xl font-bold");
+        linea(caja, "DNI: " + r.datos.dni, "text-lg");
+        linea(caja, "Área: " + r.datos.area, "text-lg");
+      } else if (r.codigo) {
+        linea(caja, "Código: " + r.codigo, "font-mono text-lg");
+      }
+      if (r.hora) linea(caja, "🕒 " + r.hora, "mt-2 text-lg font-semibold");
+
+      if (estado !== "CARGANDO") {
+        temporizador = setTimeout(() => {
+          caja.className = "rounded-xl p-5 bg-slate-800 min-h-[220px] flex flex-col justify-center text-center";
+          caja.innerHTML = '<p class="text-slate-400">Esperando lectura…</p>';
+        }, MOSTRAR_MS);
+      }
+    }
+
+    function linea(padre, texto, clases) {
+      const p = document.createElement("p");
+      p.className = clases;
+      p.textContent = texto;       // textContent evita inyección de HTML
+      padre.appendChild(p);
+    }
+
+    function agregarHistorial(r, codigo) {
+      const nombre = r.datos ? (r.datos.nombres + " " + r.datos.apellidos) : codigo;
+      historial.unshift({ hora: r.hora || "--:--:--", nombre: nombre, estado: r.estado, tipo: r.tipo || "" });
+      if (historial.length > 8) historial.pop();
+      const ul = $("historial");
+      ul.innerHTML = "";
+      historial.forEach(h => {
+        const li = document.createElement("li");
+        li.className = "py-2 flex justify-between gap-2";
+        const izq = document.createElement("span");
+        izq.textContent = h.hora + "  " + h.nombre;
+        const der = document.createElement("span");
+        der.className = h.estado === "OK" ? "text-green-400 font-semibold" : "text-red-300 font-semibold";
+        der.textContent = h.estado === "OK" ? h.tipo : h.estado.replace("_", " ");
+        li.appendChild(izq);
+        li.appendChild(der);
+        ul.appendChild(li);
+      });
+    }
+
+    function avisar(r) {
+      try { if (navigator.vibrate) navigator.vibrate(r.estado === "OK" ? 120 : [200, 100, 200]); } catch (e) {}
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        osc.frequency.value = r.estado === "OK" ? 880 : 220;
+        osc.connect(ctx.destination);
+        osc.start();
+        setTimeout(() => { osc.stop(); ctx.close(); }, r.estado === "OK" ? 150 : 400);
+      } catch (e) {}
+    }
+
+    // ======== CÁMARA ========
+    async function iniciarCamara() {
+      if (camaraActiva) return;
+      try {
+        obtenerClave(false);
+        $("contenedorLector").classList.remove("hidden");
+        scanner = scanner || new Html5Qrcode("reader");
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: (w, h) => { const s = Math.floor(Math.min(w, h) * 0.75); return { width: s, height: s }; } },
+          texto => procesarLectura(texto),
+          () => {}
+        );
+        camaraActiva = true;
+        $("btnCamara").textContent = "■ DETENER CÁMARA";
+        $("btnCamara").className = "flex-1 bg-red-600 active:bg-red-800 text-white font-bold py-4 rounded-xl text-lg shadow";
+      } catch (err) {
+        $("contenedorLector").classList.add("hidden");
+        alert("No se pudo abrir la cámara: " + err +
+              "\n\nVerifica que la página abra con https:// y que Chrome tenga permiso de cámara para este sitio.");
+      }
+    }
+
+    async function detenerCamara() {
+      if (!camaraActiva) return;
+      try { await scanner.stop(); } catch (e) {}
+      camaraActiva = false;
+      $("contenedorLector").classList.add("hidden");
+      $("btnCamara").textContent = "▶ INICIAR CÁMARA";
+      $("btnCamara").className = "flex-1 bg-sky-600 active:bg-sky-800 text-white font-bold py-4 rounded-xl text-lg shadow";
+    }
+
+    $("btnCamara").addEventListener("click", () => camaraActiva ? detenerCamara() : iniciarCamara());
+
+    // Alternativa: tomar una foto del QR con la app de cámara del dispositivo
+    $("btnFoto").addEventListener("click", () => $("inputFoto").click());
+    $("inputFoto").addEventListener("change", async e => {
+      const archivo = e.target.files[0];
+      if (!archivo) return;
+      try {
+        const lector = new Html5Qrcode("lectorArchivo");
+        const texto = await lector.scanFile(archivo, false);
+        ultimoCodigo = ""; // permite reintentar el mismo QR
+        await procesarLectura(texto);
+      } catch (err) {
+        mostrarEstado("ERROR", { mensaje: "No se detectó un QR en la foto. Intenta con más luz y más cerca." });
+      } finally {
+        e.target.value = "";
+      }
+    });
+  </script>
+</body>
+</html>
